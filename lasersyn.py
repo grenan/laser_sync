@@ -29,22 +29,6 @@ if parameter_set_1:
     
     T = t_s/t_p
     P_0 = (t_p * G_n * N_th) / 2
-    #I = 20
-    el = 1.6E-19
-    V = 0.00000001
-
-parameter_set_2 = False
-if parameter_set_2:
-    I_th = 1.155
-    N_th = 1.5E18
-    t_p = 1.11E-12
-    t_s = 22.2E-12
-    alpha = 4.0
-    G_n = 2.6E-6
-    
-    T = 1710
-    P_0 = (t_p * G_n * N_th) / 2
-    #I = 20
     el = 1.6E-19
     V = 0.00000001
 
