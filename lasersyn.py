@@ -6,34 +6,56 @@ Created on Sun Feb  2 17:07:01 2014
 """
 
 # TODO:
-# I don't know why, but the coupled ones, at some eta level, blast of to 
-# infinity - it's unstable. I should fix this.
+# I don't know why, but the coupled ones, at some eta level, blast off to 
+# infinity - it's unstable. I should fix this. Perhaps use an adaptive timestep somehow?
 
-import numerics
 import scipy
 import matplotlib.pyplot as plt
 from math import e, pi, cos, sin, sqrt
+
+def integrate_complex_system(t0, t1, dt, f, initial_conditions):
+    """
+    Solves the complex ordinary differential equation in the form
+    y'(x) = f(x,y)
+    where both x and y are vectors.
+    This is basically just a wrapper for the scipy complex ode,
+    since it requires a bit of code duplication and also doesn't
+    return a list but rather values one after the other.
+
+    f is a function in the form f(t, y), where y is a vector. 
+    initial_conditions is a vector y values at t = t0.
+
+    Returns a list of times and list of values (ts, ys).
+    """
+    ts = []
+    ys = []
+    r = scipy.integrate.complex_ode(f).set_integrator('vode', method='bdf')
+    r.set_initial_value(initial_conditions, t0)
+    while r.successful() and r.t < t1:
+        r.integrate(r.t+dt)
+        ys.append(r.y)
+        ts.append(r.t)
+    if not r.successful():
+        raise ValueError("Integration not successful for some reason.")
+    return (ts, ys)    
 
 ####################################################
 # We'll start with unnormalized single laser.
 ####################################################
 #I_th = 20.0
-parameter_set_1 = True
-if parameter_set_1:
-    I_th = 5
-    N_th = 1.5E18
-    t_p = 4.5E-12
-    t_s = 700E-12
-    alpha = 5.0
-    G_n = 2.6E-6
+I_th = 5
+N_th = 1.5E18
+t_p = 4.5E-12
+t_s = 700E-12
+alpha = 5.0
+G_n = 2.6E-6
+T = t_s/t_p
+P_0 = (t_p * G_n * N_th) / 2
+el = 1.6E-19
+V = 0.00000001
     
-    T = t_s/t_p
-    P_0 = (t_p * G_n * N_th) / 2
-    el = 1.6E-19
-    V = 0.00000001
-
 def I(t):
-    # I's units are mA, I think.
+    # Its units are mA, I think.
     omega = 1E11
 #    return abs(10 * cos(omega*t))
 #    return 5*(1 - e**(-omega*t/10))
@@ -45,22 +67,25 @@ def dE(t, E, N):
 def dN(t, E, N):
     return I(t)/(el*V)  - N/t_s - abs(E)*abs(E)*(1/t_p + G_n*(N-N_th))
 
+def unnormalized_system(s, EN):
+    return scipy.array([dE(s, EN[0], EN[1]), dN(s, EN[0], EN[1])])    
+
 should_show_unnormalized_laer = False
 if should_show_unnormalized_laer:
     dt = 1E-13
     max_time = dt * 10000
-    initial_conditions = [100,N_th] # E, N
-    solution = numerics.solve_coupled_system(dt, max_time, initial_conditions,
-                                  [dE, dN])
-    print "Complete"                              
-    times = [t for (t, E, N) in solution]
-    N = [N for (t, E, N) in solution]
-    intensities = [abs(E)*abs(E) for (t, E, _) in solution]
+    initial_conditions = [100, N_th] # E, N
+    times, values = integrate_complex_system(0, max_time, dt, unnormalized_system, initial_conditions)
+    Es, Ns = zip(*values)
+    intensities = [abs(E)**2 for E in Es]    
+    
     plt.figure()
-    plt.plot(times, N)
-    plt.show()
+    plt.plot(times, Ns)
+    plt.title("N")
     plt.figure()
     plt.plot(times, intensities)
+    plt.title("Intensities")
+    plt.show()
 
 ####################################################
 # Ok, normal laser works as predicted for CW.
@@ -79,58 +104,24 @@ def dY(s, Y, Z):
 def dZ(s, Y, Z):
     return (P(s) - Z - (1 + 2*Z)*abs(Y)*abs(Y)) / T
 
-# Uncomment this to run single normalized laser
+def normalized_system(s, YZ):
+    return scipy.array([dY(s, YZ[0], YZ[1]), dZ(s, YZ[0], YZ[1])])
 
 should_show_normalized_laser = False
 if should_show_normalized_laser:    
     dt = 2E-13 / t_p
     max_time = dt * 10000
     initial_conditions = [100 * sqrt(t_s*G_n/2), 0] # Y, Z
-    solution = numerics.solve_coupled_system(dt, max_time, initial_conditions,
-                                  [dY, dZ])
-    print "Complete"                              
-    times = [t for (t, Y, Z) in solution]
-    Z = [Z for (t, Y, Z) in solution]
-    intensities = [abs(Y)*abs(Y) for (t, Y, _) in solution]
+    times, values = integrate_complex_system(0, max_time, dt, normalized_system, initial_conditions)
+    Ys, Zs = zip(*values)
+    intensities = [abs(Y)**2 for Y in Ys]    
     plt.figure()
-    plt.plot(times, Z)
-    plt.title("Z, homemade")
-    plt.show()
+    plt.plot(times, Zs)
+    plt.title("Z")
     plt.figure()
     plt.plot(times, intensities)
-    plt.title("Intensities, homemade")
-
-
-def normalized_system(s, YZ):
-    return scipy.array([dY(s,YZ[0],YZ[1]), dZ(s,YZ[0],YZ[1])])
-    
-should_show_numpy_ode_normalized_laser = False    
-if should_show_numpy_ode_normalized_laser:        
-    dt = 2E-13 / t_p
-    numpoints = 10000
-    max_time = dt * numpoints
-    time_spacing = scipy.linspace(0, max_time, numpoints)
-    initial_conditions = [100 * sqrt(t_s*G_n/2), 0] # Y, Z
-#    scipy.integrate.odeint(dFoo, initial_conditions, time_spacing, args=())                           
-#    r = scipy.integrate.complex_ode(dFoo).set_integrator('zvode')
-    r = scipy.integrate.complex_ode(normalized_system).set_integrator('vode', method='bdf')
-    r.set_initial_value(initial_conditions, 0)
-    ys = []
-    zs = []
-    ts = []
-    while r.successful() and r.t < max_time:
-        r.integrate(r.t+dt)
-#        print("%g dt%g" % (r.t, r.y[0]))
-        ys.append(abs(r.y[0]**2))
-        zs.append(r.y[1])
-        ts.append(r.t)
-    plt.figure()
-    plt.plot(ts, zs)
-    plt.title("Z, numpy")
-    plt.figure()
-    plt.plot(ts, ys)
-    plt.title("Intensities, numpy")
-
+    plt.title("Intensities")
+    plt.show()
     
 ####################################################
 # Ok, normalization works ok.
@@ -146,7 +137,7 @@ angular_f_r = f_r * 2 * pi
 omega = angular_f_r * t_p
 
 # Coupling parameter:
-eta = 4.32E-2
+eta = 4.32E-5
 
 def dY1(s, Y1, Z1, Y2, Z2):
     return (1 + 1j*alpha)* Y1 * Z1 + eta*Z2*(s-theta)*(e**(-1j*omega*theta))
@@ -158,67 +149,34 @@ def dY2(s, Y1, Z1, Y2, Z2):
     return (1 + 1j*alpha)* Y2 * Z2 + eta*Z1*(s-theta)*(e**(-1j*omega*theta))
 
 def dZ2(s, Y1, Z1, Y2, Z2):
-    return (P(s) - Z2 - (1 + 2*Z2)*abs(Y2)*abs(Y2)) / T   
+    return (P(s) - Z2 - (1 + 2*Z2)*abs(Y2)*abs(Y2)) / T
+
+def coupled_system(s, Y1Z1Y2Z2):
+    Y1, Z1, Y2, Z2 = Y1Z1Y2Z2
+    return scipy.array([dY1(s, Y1, Z1, Y2, Z2), dZ1(s, Y1, Z1, Y2, Z2),
+                        dY2(s, Y1, Z1, Y2, Z2), dZ2(s, Y1, Z1, Y2, Z2)])
     
 should_show_coupled_lasers = True
 if should_show_coupled_lasers:
     dt = 5E-13 / t_p
     max_time = dt * 10000
     initial_conditions = [100 * sqrt(t_s*G_n/2), 0,    # Y1, Z1
-                          (1+1E-9)*1 * sqrt(t_s*G_n/2), 0,    # Y2, Z2
-                          ]
-    solution = numerics.solve_coupled_system(dt, max_time, initial_conditions,
-                                  [dY1, dZ1, dY2, dZ2])
-    print "Complete"                              
-    times = [t for (t, Y1, Z1, Y2, Z2) in solution]
-    Z1 = [Z1 for (t, Y1, Z1, Y2, Z2) in solution]
-    intensities1 = [abs(Y1)*abs(Y1) for (t, Y1, _, _, _) in solution]
-    intensities2 = [abs(Y2)*abs(Y2) for (t, _, _, Y2, _) in solution]
+                          (1+1E-9)*100 * sqrt(t_s*G_n/2), 0,    # Y2, Z2
+                         ]
+    times, values = integrate_complex_system(0, max_time, dt, coupled_system, initial_conditions)
+    Y1s, Z1s, Y2s, Z2s = zip(*values)
+    intensities1 = [abs(Y)**2 for Y in Y1s]
+    intensities2 = [abs(Y)**2 for Y in Y2s]
+    
     plt.figure()
-    plt.plot(times, Z1)
-    plt.title("Z, homemade")
-    plt.show()
+    plt.plot(times, Z1s, '.')
+    plt.plot(times, Z2s, '.')
+    plt.title("Z")    
     plt.figure()
     plt.plot(times, intensities1, '.')
     plt.plot(times, intensities2, '.')
-    plt.title("Intensities, homemade")
-
-def coupled_system(s, Y1Z1Y2Z2):
-    Y1, Z1, Y2, Z2 = Y1Z1Y2Z2
-    return scipy.array([dY1(s, Y1, Z2, Y2, Z2),
-                        dZ1(s, Y1, Z2, Y2, Z2),
-                        dY2(s, Y1, Z2, Y2, Z2),
-                        dZ2(s, Y1, Z2, Y2, Z2)])
-
-should_show_numpy_ode_coupled_laser = True    
-if should_show_numpy_ode_coupled_laser:        
-    dt = 2E-13 / t_p
-    numpoints = 10000
-    max_time = dt * numpoints
-    time_spacing = scipy.linspace(0, max_time, numpoints)
-    initial_conditions = [100 * sqrt(t_s*G_n/2), 0,    # Y1, Z1
-                          (1+1E-9)*1 * sqrt(t_s*G_n/2), 0,    # Y2, Z2
-                          ]
-    r = scipy.integrate.complex_ode(coupled_system).set_integrator('vode', method='bdf')
-    r.set_initial_value(initial_conditions, 0)
-    y1s = []
-    y2s = []
-    z1s = []
-    ts = []
-    while r.successful() and r.t < max_time:
-        r.integrate(r.t+dt)
-#        print("%g dt%g" % (r.t, r.y[0]))
-        y1s.append(abs(r.y[0]**2))
-        y2s.append(abs(r.y[2]**2))
-        z1s.append(r.y[1])
-        ts.append(r.t)                        
-    plt.figure()
-    plt.plot(ts, z1s)
-    plt.title("Z, numpy")    
-    plt.figure()
-    plt.plot(ts, y1s, '.')
-    plt.plot(ts, y2s, '.')
-    plt.title("Intensities, numpy")
+    plt.title("Intensities")
+    plt.show()
     
 ## Theta: Ratio between photon flight time from one laser to the other,
 ## tau_f, and the photon lifetime inside the laser, tau_p.
