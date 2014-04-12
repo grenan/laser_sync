@@ -246,8 +246,6 @@ if should_show_numpy_ode_coupled_laser:
 #eta = 5E-4
 #eta = 0 
 #
-## Note: these are actually dimensionless, normalized equations. 
-##TODO: check out how they normalized with more rigour. 
 #
 #def dE1(t, E1, E2, N1, N2):
 #    s = t / tau_p
