@@ -237,7 +237,6 @@ if should_show_numpy_ode_coupled_laser:
 #alpha = 4
 #
 ## T: ratio between carrier lifetime and the photon lifetime.
-##XXX: Note to self: find out what this means. What is carrier?
 #T = 1710
 #
 ## P: Dimensionless pumping current above solitary laser threshold.
