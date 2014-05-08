@@ -194,14 +194,14 @@ class CoupledLasers(object):
 
     def dY1(self, s, Y1, Z1, Y2, Z2):
         old_y2 = self.get_history_at_time(s-theta)[2]
-        return (1 + 1j*alpha)* Y1 * Z1 + eta*old_z2*(e**(-1j*omega*theta))
+        return (1 + 1j*alpha)* Y1 * Z1 + eta*old_y2*(e**(-1j*omega*theta))
 
     def dZ1(self, s, Y1, Z1, Y2, Z2):
         return (P(s) - Z1 - (1 + 2*Z1)*abs(Y1)*abs(Y1)) / T
     
     def dY2(self, s, Y1, Z1, Y2, Z2):
         old_y1 = self.get_history_at_time(s-theta)[0]
-        return (1 + 1j*alpha)* Y2 * Z2 + eta*old_z1*(e**(-1j*omega*theta))
+        return (1 + 1j*alpha)* Y2 * Z2 + eta*old_y1*(e**(-1j*omega*theta))
 
     def dZ2(self, s, Y1, Z1, Y2, Z2):
         return (P(s) - Z2 - (1 + 2*Z2)*abs(Y2)*abs(Y2)) / T
@@ -223,7 +223,7 @@ if should_show_coupled_lasers:
     # any effect of actual feedback (well, otherwise you are practically
     # just playing with a different theta than you think you are)
     dt = 1.0E-12 / t_p
-    max_time = dt * 5000
+    max_time = dt * 4000
     initial_conditions = [100 * sqrt(t_s*G_n/2), 0,    # Y1, Z1
                           (1+1E-5) * 1 * sqrt(t_s*G_n/2), 0,    # Y2, Z2
                          ]
