@@ -5,10 +5,6 @@ Created on Sun Feb  2 17:07:01 2014
 @author: renan
 """
 
-# TODO:
-# I don't know why, but the coupled ones, at some eta level, blast off to 
-# infinity - it's unstable. I should fix this. Perhaps use an adaptive timestep somehow?
-
 import scipy
 import scipy.integrate
 import matplotlib.pyplot as plt
