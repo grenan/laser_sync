@@ -30,7 +30,8 @@ def integrate_complex_system(t0, t1, dt, f, initial_conditions):
     """
     ts = []
     ys = []
-    r = scipy.integrate.complex_ode(f).set_integrator('vode', method='bdf')
+    # r = scipy.integrate.complex_ode(f).set_integrator('vode', method='bdf')
+    r = scipy.integrate.complex_ode(f).set_integrator('dopri5', method='bdf')
     r.set_initial_value(initial_conditions, t0)
     while r.successful() and r.t < t1:
         r.integrate(r.t+dt)
@@ -46,9 +47,9 @@ def integrate_complex_system(t0, t1, dt, f, initial_conditions):
 #I_th = 20.0
 I_th = 5
 N_th = 1.5E18
-t_p = 4.5E-12
-t_s = 700E-12
-alpha = 5.0
+t_p = 1.1E-12
+t_s = 1925E-12
+alpha = 4.0
 G_n = 2.6E-6
 T = t_s/t_p
 P_0 = (t_p * G_n * N_th) / 2
@@ -111,7 +112,7 @@ def normalized_system(s, YZ):
 
 should_show_normalized_laser = False
 if should_show_normalized_laser:    
-    dt = 2E-13 / t_p
+    dt = 2E-12 / t_p
     max_time = dt * 10000
     initial_conditions = [100 * sqrt(t_s*G_n/2), 0] # Y, Z
     times, values = integrate_complex_system(0, max_time, dt, normalized_system, initial_conditions)
@@ -140,7 +141,11 @@ angular_f_r = f_r * 2 * pi
 omega = angular_f_r * t_p
 
 # Coupling parameter:
-eta = 4.32E-2
+eta = 2.0E-4
+
+# Note: coupling requires access to the laser state at a previous (far away)
+# time. This makes it a bit harder to integrate, since you have to save
+# those values and use them online. Not to worry!
 
 def dY1(s, Y1, Z1, Y2, Z2):
     return (1 + 1j*alpha)* Y1 * Z1 + eta*Z2*(s-theta)*(e**(-1j*omega*theta))
@@ -159,12 +164,12 @@ def coupled_system(s, Y1Z1Y2Z2):
     return scipy.array([dY1(s, Y1, Z1, Y2, Z2), dZ1(s, Y1, Z1, Y2, Z2),
                         dY2(s, Y1, Z1, Y2, Z2), dZ2(s, Y1, Z1, Y2, Z2)])
     
-should_show_coupled_lasers = True
+should_show_coupled_lasers = False
 if should_show_coupled_lasers:
-    dt = 5E-13 / t_p
+    dt = 4E-12 / t_p
     max_time = dt * 10000
     initial_conditions = [100 * sqrt(t_s*G_n/2), 0,    # Y1, Z1
-                          (1+1E-9)*100 * sqrt(t_s*G_n/2), 0,    # Y2, Z2
+                          1 * sqrt(t_s*G_n/2), 0,    # Y2, Z2
                          ]
     times, values = integrate_complex_system(0, max_time, dt, coupled_system, initial_conditions)
     Y1s, Z1s, Y2s, Z2s = zip(*values)
