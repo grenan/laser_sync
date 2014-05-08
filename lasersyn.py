@@ -254,6 +254,7 @@ if should_show_coupled_lasers:
     max_time = dt * 20000
     initial_conditions = [100 * sqrt(t_s*G_n/2), 0,    # Y1, Z1
                           (1+1E-5) * 1 * sqrt(t_s*G_n/2), 0,    # Y2, Z2
+                          #7 * sqrt(t_s*G_n/2), 0,
                          ]
     coupled = CoupledRingLasers(2)
     times, values = integrate_complex_system_with_history(0, max_time, dt, coupled, initial_conditions)
