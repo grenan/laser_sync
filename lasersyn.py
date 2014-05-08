@@ -10,6 +10,7 @@ Created on Sun Feb  2 17:07:01 2014
 # infinity - it's unstable. I should fix this. Perhaps use an adaptive timestep somehow?
 
 import scipy
+import scipy.integrate
 import matplotlib.pyplot as plt
 from math import e, pi, cos, sin, sqrt
 
