@@ -10,6 +10,8 @@ import scipy.integrate
 import matplotlib.pyplot as plt
 from math import e, pi, cos, sin, sqrt
 
+flatten = lambda l : [item for sublist in l for item in sublist]
+
 def integrate_complex_system(t0, t1, dt, f, initial_conditions):
     """
     Solves the complex ordinary differential equation in the form
@@ -158,28 +160,39 @@ angular_f_r = f_r * 2 * pi
 omega = angular_f_r * t_p
 
 # Coupling parameter:
-eta = 1.5E-1
+eta = 5.0E-4
 
 # Note: coupling requires access to the laser state at a previous (far away)
 # time. This makes it a bit harder to integrate, since you have to save
 # those values and use them online. Not to worry!
 
-class CoupledLasers(object):
-    #TODO: generalize to n lasers so that it can build it automatically.
-    # Also allow calibration with parameters etc. Slowly build it up, though,
-    # no need to rush into too general things before it's time to do so.
-    def __init__(self):
+class CoupledRingLasers(object):
+    """
+    Used solving a ring of coupled lasers, where the i-th laser feeds its beam
+    into the i+1-th.
+
+    Note for the programmer: counting starts from 0! So if there are three
+    lasers, they will be labeled 0,1,2.
+    """
+    def __init__(self, n):
+        """
+        n - the number of lasers feeding to eacher other. Assumes n>=2.
+        """
+        self.n = n
         # History: a list in the format (time, [values]), (time, values)...
         self.history = []
+        self.dYs = [self._generate_dYk(k) for k in xrange(n)]
+        self.dZs = [self._generate_dZk(k) for k in xrange(n)]
 
     def get_history_at_time(self, t):
+        default_to_return = [0] * (2 * self.n)
         if self.history == []:
-            return [0,0,0,0]
+            return default_to_return
         # TODO: make it so that this is adjustable, if need be. 
         #!!! Assumes that the earliest time possible is t = 0.
         # Any requests to get history earlier than that will return nothing.
         if t <= 0:
-            return [0,0,0,0]
+            return default_to_return
 
         i = 1
         try:        
@@ -187,47 +200,62 @@ class CoupledLasers(object):
                 i+=1
             return self.history[-i][1]
         except IndexError: # Not found yet, just pesky negative indexing.
-            return [0,0,0,0]
-
+            return default_to_return
+            
     def update_history(self, t, values):
         self.history.append((t, values))
 
-    def dY1(self, s, Y1, Z1, Y2, Z2):
-        old_y2 = self.get_history_at_time(s-theta)[2]
-        return (1 + 1j*alpha)* Y1 * Z1 + eta*old_y2*(e**(-1j*omega*theta))
+    def _generate_dYk(self, k):
+        """
+        Generates the function which calculates dYk/ds.
+        This depends both on the history (because laser k-1 shoots into laser
+        k), and on the laser k itself. The function will be of the format:
+        f(s,*args), where *args is a list y0,z0,y1,z1,... of current values
+        of ALL the lasers.
+        """
+        previous_k = (k-1) % self.n
+        def dYk(s, *args):
+            old_y_prev_k = self.get_history_at_time(s-theta)[2*previous_k]
+            Yk = args[2*k]
+            Zk = args[2*k+1]
+            return (1+1j*alpha) * Yk * Zk + eta * old_y_prev_k*(e**(-1j*omega*theta))
+        return dYk
 
-    def dZ1(self, s, Y1, Z1, Y2, Z2):
-        return (P(s) - Z1 - (1 + 2*Z1)*abs(Y1)*abs(Y1)) / T
-    
-    def dY2(self, s, Y1, Z1, Y2, Z2):
-        old_y1 = self.get_history_at_time(s-theta)[0]
-        return (1 + 1j*alpha)* Y2 * Z2 + eta*old_y1*(e**(-1j*omega*theta))
+    def _generate_dZk(self, k):
+        """
+        See description for _generate_dYk; this is the same, but for the Z
+        variable.
+        """
+        def dZk(s, *args):
+            Yk = args[2*k]
+            Zk = args[2*k+1]
+            return (P(s) - Zk - (1 + 2*Zk)*abs(Yk)*abs(Yk)) / T
+        return dZk
 
-    def dZ2(self, s, Y1, Z1, Y2, Z2):
-        return (P(s) - Z2 - (1 + 2*Z2)*abs(Y2)*abs(Y2)) / T
+    def _coupled_system(self, s, values):
+        # A list in the format: [dY0, dZ0, dY1, dZ1, ...]
+        all_interlaced_functions = flatten(zip(self.dYs, self.dZs))
+        # Compute all the current contributions to each value, and return.
+        return scipy.array([f(s, *values) for f in all_interlaced_functions])
 
-    def coupled_system(self, s, Y1Z1Y2Z2):
-        Y1, Z1, Y2, Z2 = Y1Z1Y2Z2
-        return scipy.array([self.dY1(s, Y1, Z1, Y2, Z2),
-                            self.dZ1(s, Y1, Z1, Y2, Z2),
-                            self.dY2(s, Y1, Z1, Y2, Z2),
-                            self.dZ2(s, Y1, Z1, Y2, Z2)])
-
-    def __call__(self, s, Y1Z1Y2Z2):
-        return self.coupled_system(s, Y1Z1Y2Z2)
-
-
+    def __call__(self, s, values):
+        """
+        Values is a list of the current values of the system:
+        [y0, z0, y1, z1, y2, z2, ... yn-1, zn-1]
+        """
+        return self._coupled_system(s, values)
+        
 should_show_coupled_lasers = True
 if should_show_coupled_lasers:
     # Note: this must be smaller than the "theta" parameter if you want
     # any effect of actual feedback (well, otherwise you are practically
     # just playing with a different theta than you think you are)
     dt = 1.0E-12 / t_p
-    max_time = dt * 4000
+    max_time = dt * 20000
     initial_conditions = [100 * sqrt(t_s*G_n/2), 0,    # Y1, Z1
                           (1+1E-5) * 1 * sqrt(t_s*G_n/2), 0,    # Y2, Z2
                          ]
-    coupled  = CoupledLasers()
+    coupled = CoupledRingLasers(2)
     times, values = integrate_complex_system_with_history(0, max_time, dt, coupled, initial_conditions)
     Y1s, Z1s, Y2s, Z2s = zip(*values)
     intensities1 = [abs(Y)**2 for Y in Y1s]
