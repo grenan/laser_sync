@@ -95,6 +95,7 @@ if should_show_unnormalized_laer:
 
 def P(s):
     P0 = 1E1
+    P0 = 2.8875
     return P0 * (I(s * t_p)/I_th - 1) 
 
 # Y = def= sqrt(t_s * G_N / 2) * E
@@ -128,7 +129,8 @@ if should_show_normalized_laser:
 # Ok, normalization works ok.
 # Let's create two lasers and couple them.
 ####################################################
-# Theta: Ratio between photon flight time from one laser to the other,
+# Theta: Ratio between photon flight time from one laser to the other and
+# the photon lifetime within the laser.
 theta = 20
 
 # omega: Produdct of the angular frequency of a solitary laser and the photon 
@@ -138,7 +140,7 @@ angular_f_r = f_r * 2 * pi
 omega = angular_f_r * t_p
 
 # Coupling parameter:
-eta = 4.32E-5
+eta = 4.32E-2
 
 def dY1(s, Y1, Z1, Y2, Z2):
     return (1 + 1j*alpha)* Y1 * Z1 + eta*Z2*(s-theta)*(e**(-1j*omega*theta))
@@ -171,11 +173,11 @@ if should_show_coupled_lasers:
     
     plt.figure()
     plt.plot(times, Z1s, '.')
-    plt.plot(times, Z2s, '.')
+    plt.plot(times, Z2s, 'x')
     plt.title("Z")    
     plt.figure()
     plt.plot(times, intensities1, '.')
-    plt.plot(times, intensities2, '.')
+    plt.plot(times, intensities2, 'x')
     plt.title("Intensities")
     plt.show()
     
