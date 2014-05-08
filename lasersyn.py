@@ -30,8 +30,7 @@ def integrate_complex_system(t0, t1, dt, f, initial_conditions):
     """
     ts = []
     ys = []
-    # r = scipy.integrate.complex_ode(f).set_integrator('vode', method='bdf')
-    r = scipy.integrate.complex_ode(f).set_integrator('dopri5', method='bdf')
+    r = scipy.integrate.complex_ode(f).set_integrator('vode', method='bdf')
     r.set_initial_value(initial_conditions, t0)
     while r.successful() and r.t < t1:
         r.integrate(r.t+dt)
@@ -39,12 +38,35 @@ def integrate_complex_system(t0, t1, dt, f, initial_conditions):
         ts.append(r.t)
     if not r.successful():
         raise ValueError("Integration not successful for some reason.")
-    return (ts, ys)    
+    return (ts, ys)
+
+def integrate_complex_system_with_history(t0, t1, dt, f, initial_conditions):
+    """
+    See documentation for integrate_complex_system.
+    Here instead of a function which calculates all the differentials,
+    we pass a class f. It is callable, calling it replicates the effect
+    of the function f in integrate_complex_system.
+    However, the functions in f also have access to its history,
+    which is updated here. This allows for more complicated connections
+    between parameters, as they can access their past (ala difference equation)
+    """
+    ts = []
+    ys = []
+    r = scipy.integrate.complex_ode(f).set_integrator('vode', method='bdf')
+    r.set_initial_value(initial_conditions, t0)
+    while r.successful() and r.t < t1:
+        r.integrate(r.t+dt)
+        ys.append(r.y)
+        ts.append(r.t)
+        f.update_history(r.t, r.y)
+
+    if not r.successful():
+        raise ValueError("Integration not successful for some reason.")
+    return (ts, ys)
 
 ####################################################
 # We'll start with unnormalized single laser.
 ####################################################
-#I_th = 20.0
 I_th = 5
 N_th = 1.5E18
 t_p = 1.1E-12
@@ -95,7 +117,6 @@ if should_show_unnormalized_laer:
 ####################################################
 
 def P(s):
-    P0 = 1E1
     P0 = 2.8875
     return P0 * (I(s * t_p)/I_th - 1) 
 
@@ -141,47 +162,91 @@ angular_f_r = f_r * 2 * pi
 omega = angular_f_r * t_p
 
 # Coupling parameter:
-eta = 2.0E-4
+eta = 5.0E-4
 
 # Note: coupling requires access to the laser state at a previous (far away)
 # time. This makes it a bit harder to integrate, since you have to save
 # those values and use them online. Not to worry!
 
-def dY1(s, Y1, Z1, Y2, Z2):
-    return (1 + 1j*alpha)* Y1 * Z1 + eta*Z2*(s-theta)*(e**(-1j*omega*theta))
+class CoupledLasers(object):
+    #TODO: generalize to n lasers so that it can build it automatically.
+    # Also allow calibration with parameters etc. Slowly build it up, though,
+    # no need to rush into too general things before it's time to do so.
+    def __init__(self):
+        # History: a list in the format (time, [values]), (time, values)...
+        self.history = []
 
-def dZ1(s, Y1, Z1, Y2, Z2):
-    return (P(s) - Z1 - (1 + 2*Z1)*abs(Y1)*abs(Y1)) / T
+    def get_history_at_time(self, t):
+        if self.history == []:
+            return [0,0,0,0]
+        # TODO: make it so that this is adjustable, if need be. 
+        #!!! Assumes that the earliest time possible is t = 0.
+        # Any requests to get history earlier than that will return nothing.
+        if t < 0:
+            return [0,0,0,0]
+
+        i = 1
+        try:
+            while self.history[-i][0] > t:
+                i+=1
+            return self.history[i][1]
+        except IndexError: # Not found, for some reason  #TODO investigate
+            return [0,0,0,0]
+
+    def update_history(self, t, values):
+        self.history.append((t, values))
+
+    def dY1(self, s, Y1, Z1, Y2, Z2):
+        old_z2 = self.get_history_at_time(s-theta)[3]
+        return (1 + 1j*alpha)* Y1 * Z1 + eta*old_z2*(e**(-1j*omega*theta))
+
+    def dZ1(self, s, Y1, Z1, Y2, Z2):
+        return (P(s) - Z1 - (1 + 2*Z1)*abs(Y1)*abs(Y1)) / T
     
-def dY2(s, Y1, Z1, Y2, Z2):
-    return (1 + 1j*alpha)* Y2 * Z2 + eta*Z1*(s-theta)*(e**(-1j*omega*theta))
+    def dY2(self, s, Y1, Z1, Y2, Z2):
+        old_z1 = self.get_history_at_time(s-theta)[1]
+        return (1 + 1j*alpha)* Y2 * Z2 + eta*old_z1*(e**(-1j*omega*theta))
 
-def dZ2(s, Y1, Z1, Y2, Z2):
-    return (P(s) - Z2 - (1 + 2*Z2)*abs(Y2)*abs(Y2)) / T
+    def dZ2(self, s, Y1, Z1, Y2, Z2):
+        return (P(s) - Z2 - (1 + 2*Z2)*abs(Y2)*abs(Y2)) / T
 
-def coupled_system(s, Y1Z1Y2Z2):
-    Y1, Z1, Y2, Z2 = Y1Z1Y2Z2
-    return scipy.array([dY1(s, Y1, Z1, Y2, Z2), dZ1(s, Y1, Z1, Y2, Z2),
-                        dY2(s, Y1, Z1, Y2, Z2), dZ2(s, Y1, Z1, Y2, Z2)])
-    
-should_show_coupled_lasers = False
+    def coupled_system(self, s, Y1Z1Y2Z2):
+        Y1, Z1, Y2, Z2 = Y1Z1Y2Z2
+        return scipy.array([self.dY1(s, Y1, Z1, Y2, Z2),
+                            self.dZ1(s, Y1, Z1, Y2, Z2),
+                            self.dY2(s, Y1, Z1, Y2, Z2),
+                            self.dZ2(s, Y1, Z1, Y2, Z2)])
+
+    def __call__(self, s, Y1Z1Y2Z2):
+        return self.coupled_system(s, Y1Z1Y2Z2)
+
+
+should_show_coupled_lasers = True
 if should_show_coupled_lasers:
-    dt = 4E-12 / t_p
+    # Note: this must be smaller than the "theta" parameter if you want
+    # any effect of actual feedback (well, otherwise you are practically
+    # just playing with a different theta than you think you are)
+    dt = 2E-12 / t_p
     max_time = dt * 10000
     initial_conditions = [100 * sqrt(t_s*G_n/2), 0,    # Y1, Z1
-                          1 * sqrt(t_s*G_n/2), 0,    # Y2, Z2
+                          (1+1E-5) * 1 * sqrt(t_s*G_n/2), 0,    # Y2, Z2
                          ]
-    times, values = integrate_complex_system(0, max_time, dt, coupled_system, initial_conditions)
+    coupled  = CoupledLasers()
+    times, values = integrate_complex_system_with_history(0, max_time, dt, coupled, initial_conditions)
     Y1s, Z1s, Y2s, Z2s = zip(*values)
     intensities1 = [abs(Y)**2 for Y in Y1s]
     intensities2 = [abs(Y)**2 for Y in Y2s]
+    real1 = [Y.real for Y in Y1s]
+    real2 = [Y.real for Y in Y2s]
     
     plt.figure()
-    plt.plot(times, Z1s, '.')
-    plt.plot(times, Z2s, 'x')
+    plt.plot(times, Z1s)
+    plt.plot(times, Z2s)
     plt.title("Z")    
     plt.figure()
-    plt.plot(times, intensities1, '.')
-    plt.plot(times, intensities2, 'x')
+    plt.plot(times, intensities1)
+    plt.plot(times, intensities2)
+    # plt.plot(times, real1)
+    # plt.plot(times, real2)
     plt.title("Intensities")
     plt.show()
