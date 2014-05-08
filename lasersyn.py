@@ -186,7 +186,7 @@ class CoupledLasers(object):
             while self.history[-i][0] > t:
                 i+=1
             return self.history[-i][1]
-        except IndexError: # Not found, for some reason  #TODO investigate
+        except IndexError: # Not found yet, just pesky negative indexing.
             return [0,0,0,0]
 
     def update_history(self, t, values):
