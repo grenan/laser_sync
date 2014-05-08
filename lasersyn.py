@@ -178,14 +178,14 @@ class CoupledLasers(object):
         # TODO: make it so that this is adjustable, if need be. 
         #!!! Assumes that the earliest time possible is t = 0.
         # Any requests to get history earlier than that will return nothing.
-        if t < 0:
+        if t <= 0:
             return [0,0,0,0]
 
         i = 1
-        try:
+        try:        
             while self.history[-i][0] > t:
                 i+=1
-            return self.history[i][1]
+            return self.history[-i][1]
         except IndexError: # Not found, for some reason  #TODO investigate
             return [0,0,0,0]
 
