@@ -65,7 +65,7 @@ def integrate_complex_system_with_history(t0, t1, dt, f, initial_conditions):
 ####################################################
 I_th = 5
 N_th = 1.5E18
-t_p = 1.1E-12
+t_p = 1.11E-12
 t_s = 1925E-12
 alpha = 4.0
 G_n = 2.6E-6
@@ -158,7 +158,7 @@ angular_f_r = f_r * 2 * pi
 omega = angular_f_r * t_p
 
 # Coupling parameter:
-eta = 5.0E-4
+eta = 1.5E-1
 
 # Note: coupling requires access to the laser state at a previous (far away)
 # time. This makes it a bit harder to integrate, since you have to save
@@ -193,14 +193,14 @@ class CoupledLasers(object):
         self.history.append((t, values))
 
     def dY1(self, s, Y1, Z1, Y2, Z2):
-        old_z2 = self.get_history_at_time(s-theta)[3]
+        old_z2 = self.get_history_at_time(s-theta)[2]
         return (1 + 1j*alpha)* Y1 * Z1 + eta*old_z2*(e**(-1j*omega*theta))
 
     def dZ1(self, s, Y1, Z1, Y2, Z2):
         return (P(s) - Z1 - (1 + 2*Z1)*abs(Y1)*abs(Y1)) / T
     
     def dY2(self, s, Y1, Z1, Y2, Z2):
-        old_z1 = self.get_history_at_time(s-theta)[1]
+        old_z1 = self.get_history_at_time(s-theta)[0]
         return (1 + 1j*alpha)* Y2 * Z2 + eta*old_z1*(e**(-1j*omega*theta))
 
     def dZ2(self, s, Y1, Z1, Y2, Z2):
@@ -222,7 +222,7 @@ if should_show_coupled_lasers:
     # Note: this must be smaller than the "theta" parameter if you want
     # any effect of actual feedback (well, otherwise you are practically
     # just playing with a different theta than you think you are)
-    dt = 2E-12 / t_p
+    dt = 1.0E-11 / t_p
     max_time = dt * 10000
     initial_conditions = [100 * sqrt(t_s*G_n/2), 0,    # Y1, Z1
                           (1+1E-5) * 1 * sqrt(t_s*G_n/2), 0,    # Y2, Z2
